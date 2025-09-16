@@ -705,6 +705,128 @@ $themeClass = $darkMode ? 'dark' : '';
             </form>
         </div>
     </div>
+    <!-- Enhanced Quick Add Modal with Payment Methods -->
+<div id="quick-add-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div class="<?= $darkMode ? 'bg-gray-800' : 'bg-white' ?> rounded-xl p-6 w-full max-w-lg">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold <?= $darkMode ? 'text-white' : 'text-gray-800' ?>">Quick Add Transaction</h3>
+            <button onclick="closeQuickAdd()" class="<?= $darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700' ?>">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="quick-add-form" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium <?= $darkMode ? 'text-gray-300' : 'text-gray-700' ?> mb-2">Type</label>
+                    <select name="type" class="w-full <?= $darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800' ?> border rounded-lg px-3 py-2" required>
+                        <option value="">Select Type</option>
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium <?= $darkMode ? 'text-gray-300' : 'text-gray-700' ?> mb-2">Amount</label>
+                    <input type="number" name="amount" step="0.01" class="w-full <?= $darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800' ?> border rounded-lg px-3 py-2" placeholder="0.00" required>
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium <?= $darkMode ? 'text-gray-300' : 'text-gray-700' ?> mb-2">Description</label>
+                <input type="text" name="description" class="w-full <?= $darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800' ?> border rounded-lg px-3 py-2" placeholder="Transaction description" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium <?= $darkMode ? 'text-gray-300' : 'text-gray-700' ?> mb-2">Category</label>
+                <select name="category_id" class="w-full <?= $darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800' ?> border rounded-lg px-3 py-2" required>
+                    <option value="">Select Category</option>
+                    <?php
+                    $categories = $db->fetchAll("SELECT * FROM categories WHERE user_id = ? OR is_default = 1 ORDER BY name", [$user_id]);
+                    foreach ($categories as $category):
+                    ?>
+                        <option value="<?= $category['id'] ?>"><?= htmlspecialchars($category['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium <?= $darkMode ? 'text-gray-300' : 'text-gray-700' ?> mb-2">Payment Method</label>
+                <select name="payment_method" id="quick-payment-method-select" class="w-full <?= $darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800' ?> border rounded-lg px-3 py-2" required onchange="toggleQuickExternalPayment()">
+                    <option value="cash">💵 Cash</option>
+                    <option value="bank">🏦 Bank Transfer</option>
+                    <option value="mobile_money">📱 Mobile Money</option>
+                    <option value="card">💳 Debit/Credit Card</option>
+                    <?php
+                    // Get enabled external payment methods
+                    if (class_exists('PaymentMethodsConfig')):
+                        $paymentConfig = new PaymentMethodsConfig($db, $user_id);
+                        $enabledMethods = $paymentConfig->getEnabledPaymentMethods();
+                        $availableMethods = $paymentConfig->getAvailablePaymentMethods();
+                        
+                        foreach ($enabledMethods as $method):
+                            $methodData = $availableMethods[$method['method_name']];
+                        ?>
+                            <option value="<?= $method['method_name'] ?>" data-external="true">
+                                <?= $method['method_name'] === 'mpesa' ? '📱' : ($method['method_name'] === 'binance' ? '₿' : ($method['method_name'] === 'paypal' ? '🏧' : '💳')) ?> 
+                                <?= $methodData['name'] ?>
+                            </option>
+                        <?php endforeach;
+                    endif; ?>
+                </select>
+            </div>
+            
+            <!-- External Payment Options -->
+            <div id="quick-external-payment-options" class="hidden">
+                <div class="flex items-center p-3 <?= $darkMode ? 'bg-blue-900' : 'bg-blue-50' ?> rounded-lg">
+                    <input type="checkbox" name="use_external_payment" id="quick-use-external-payment" value="1" class="rounded border-gray-300 text-blue-600">
+                    <label for="quick-use-external-payment" class="ml-2 text-sm <?= $darkMode ? 'text-blue-200' : 'text-blue-800' ?>">
+                        Process payment through external gateway
+                    </label>
+                </div>
+                <p class="text-xs <?= $darkMode ? 'text-gray-400' : 'text-gray-500' ?> mt-2">
+                    If unchecked, this will be recorded as a manual transaction
+                </p>
+            </div>
+            
+            <!-- Reference Number (optional) -->
+            <div>
+                <label class="block text-sm font-medium <?= $darkMode ? 'text-gray-300' : 'text-gray-700' ?> mb-2">Reference Number (Optional)</label>
+                <input type="text" name="reference_number" class="w-full <?= $darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800' ?> border rounded-lg px-3 py-2" placeholder="Transaction reference">
+            </div>
+            
+            <div class="flex space-x-3 pt-4">
+                <button type="button" onclick="closeQuickAdd()" class="flex-1 <?= $darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800' ?> py-2 px-4 rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" class="flex-1 gradient-primary text-white py-2 px-4 rounded-lg hover:opacity-90 transition-opacity">
+                    <span id="quick-submit-btn-text">Add Transaction</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Payment Processing Modal -->
+<div id="payment-processing-modal" class="fixed inset-0 bg-black bg-opacity-50 z-60 hidden flex items-center justify-center p-4">
+    <div class="<?= $darkMode ? 'bg-gray-800' : 'bg-white' ?> rounded-xl p-6 w-full max-w-md text-center">
+        <div class="mb-4">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" id="quick-processing-icon-container">
+                <i class="fas fa-spinner fa-spin text-blue-600 text-2xl" id="quick-processing-icon"></i>
+            </div>
+            <h3 class="text-lg font-semibold <?= $darkMode ? 'text-white' : 'text-gray-800' ?>" id="quick-processing-title">Processing Payment</h3>
+            <p class="<?= $darkMode ? 'text-gray-400' : 'text-gray-600' ?>" id="quick-processing-message">Please wait while we process your payment...</p>
+        </div>
+        
+        <div id="quick-payment-instructions" class="hidden">
+            <!-- Payment-specific instructions will be shown here -->
+        </div>
+        
+        <div id="quick-payment-actions" class="space-y-3 hidden">
+            <button onclick="closeQuickProcessingModal()" class="w-full <?= $darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800' ?> py-2 px-4 rounded-lg transition-colors">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
 
     <!-- Chart.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -1230,6 +1352,212 @@ window.addEventListener('appinstalled', (e) => {
         installButton.remove();
     }
 });
+
+
+<script>
+// Enhanced JavaScript for quick add payment methods
+function toggleQuickExternalPayment() {
+    const select = document.getElementById('quick-payment-method-select');
+    const options = document.getElementById('quick-external-payment-options');
+    const submitBtn = document.getElementById('quick-submit-btn-text');
+    const selectedOption = select.options[select.selectedIndex];
+    
+    if (selectedOption.dataset.external === 'true') {
+        options.classList.remove('hidden');
+        const useExternal = document.getElementById('quick-use-external-payment');
+        if (useExternal.checked) {
+            submitBtn.textContent = 'Process Payment';
+        } else {
+            submitBtn.textContent = 'Record Transaction';
+        }
+    } else {
+        options.classList.add('hidden');
+        submitBtn.textContent = 'Add Transaction';
+    }
+}
+
+// Update checkbox event listener
+document.getElementById('quick-use-external-payment')?.addEventListener('change', function() {
+    const submitBtn = document.getElementById('quick-submit-btn-text');
+    if (this.checked) {
+        submitBtn.textContent = 'Process Payment';
+    } else {
+        submitBtn.textContent = 'Record Transaction';
+    }
+});
+
+// Update form submission to handle external payments
+document.getElementById('quick-add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const paymentMethod = formData.get('payment_method');
+    const useExternal = formData.get('use_external_payment') === '1';
+    const externalMethods = ['mpesa', 'binance', 'paypal', 'stripe'];
+    
+    if (externalMethods.includes(paymentMethod) && useExternal) {
+        // Show processing modal
+        document.getElementById('payment-processing-modal').classList.remove('hidden');
+        
+        // Update processing modal based on payment method
+        updateQuickProcessingModal(paymentMethod);
+    }
+    
+    try {
+        const response = await fetch('ajax/add_transaction.php', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            if (externalMethods.includes(paymentMethod) && useExternal) {
+                handleQuickExternalPaymentResponse(result);
+            } else {
+                closeQuickAdd();
+                showNotification(result.message, 'success');
+                setTimeout(() => location.reload(), 1000);
+            }
+        } else {
+            closeQuickProcessingModal();
+            showNotification(result.message, 'error');
+        }
+    } catch (error) {
+        closeQuickProcessingModal();
+        showNotification('Network error. Please try again.', 'error');
+    }
+});
+
+function updateQuickProcessingModal(paymentMethod) {
+    const title = document.getElementById('quick-processing-title');
+    const message = document.getElementById('quick-processing-message');
+    const iconContainer = document.getElementById('quick-processing-icon-container');
+    
+    switch (paymentMethod) {
+        case 'mpesa':
+            title.textContent = 'M-Pesa Payment';
+            message.textContent = 'Initiating M-Pesa STK Push...';
+            iconContainer.style.backgroundColor = '#00d13a20';
+            break;
+        case 'binance':
+            title.textContent = 'Binance Pay';
+            message.textContent = 'Creating Binance payment...';
+            iconContainer.style.backgroundColor = '#f0b90b20';
+            break;
+        case 'paypal':
+            title.textContent = 'PayPal Payment';
+            message.textContent = 'Redirecting to PayPal...';
+            iconContainer.style.backgroundColor = '#0070ba20';
+            break;
+        case 'stripe':
+            title.textContent = 'Stripe Payment';
+            message.textContent = 'Processing Stripe payment...';
+            iconContainer.style.backgroundColor = '#635bff20';
+            break;
+        default:
+            title.textContent = 'Processing Payment';
+            message.textContent = 'Please wait...';
+    }
+}
+
+function handleQuickExternalPaymentResponse(result) {
+    const paymentMethod = result.payment_method;
+    const title = document.getElementById('quick-processing-title');
+    const message = document.getElementById('quick-processing-message');
+    const icon = document.getElementById('quick-processing-icon');
+    const instructions = document.getElementById('quick-payment-instructions');
+    const actions = document.getElementById('quick-payment-actions');
+    
+    // Stop spinner
+    icon.className = 'fas fa-check text-green-600 text-2xl';
+    
+    switch (paymentMethod) {
+        case 'mpesa':
+            title.textContent = 'M-Pesa Request Sent';
+            message.textContent = 'Check your phone and enter your M-Pesa PIN to complete the payment.';
+            instructions.innerHTML = `
+                <div class="p-4 bg-green-50 dark:bg-green-900 rounded-lg mb-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-mobile-alt text-green-600 text-2xl mr-3"></i>
+                        <div>
+                            <p class="font-medium text-green-800 dark:text-green-200">STK Push Sent</p>
+                            <p class="text-sm text-green-600 dark:text-green-300">Complete payment on your phone</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            break;
+            
+        case 'binance':
+            if (result.external_data && result.external_data.checkout_url) {
+                title.textContent = 'Redirecting to Binance Pay';
+                message.textContent = 'You will be redirected to complete your payment.';
+                instructions.innerHTML = `
+                    <div class="p-4 bg-yellow-50 dark:bg-yellow-900 rounded-lg mb-4">
+                        <p class="text-yellow-800 dark:text-yellow-200">Redirecting to Binance Pay...</p>
+                    </div>
+                `;
+                
+                // Redirect to Binance checkout
+                setTimeout(() => {
+                    window.open(result.external_data.checkout_url, '_blank');
+                    closeQuickProcessingModal();
+                    setTimeout(() => location.reload(), 3000);
+                }, 2000);
+            }
+            break;
+            
+        case 'paypal':
+            if (result.external_data && result.external_data.approval_url) {
+                title.textContent = 'Redirecting to PayPal';
+                message.textContent = 'You will be redirected to complete your payment.';
+                instructions.innerHTML = `
+                    <div class="p-4 bg-blue-50 dark:bg-blue-900 rounded-lg mb-4">
+                        <p class="text-blue-800 dark:text-blue-200">Redirecting to PayPal...</p>
+                    </div>
+                `;
+                
+                // Redirect to PayPal
+                setTimeout(() => {
+                    window.open(result.external_data.approval_url, '_blank');
+                    closeQuickProcessingModal();
+                    setTimeout(() => location.reload(), 3000);
+                }, 2000);
+            }
+            break;
+            
+        case 'stripe':
+            if (result.external_data && result.external_data.client_secret) {
+                title.textContent = 'Processing Stripe Payment';
+                message.textContent = 'Please wait while we process your payment.';
+                instructions.innerHTML = `
+                    <div class="p-4 bg-purple-50 dark:bg-purple-900 rounded-lg mb-4">
+                        <p class="text-purple-800 dark:text-purple-200">Processing payment securely...</p>
+                    </div>
+                `;
+                // In a real implementation, you'd use Stripe's client-side library here
+            }
+            break;
+    }
+    
+    instructions.classList.remove('hidden');
+    actions.classList.remove('hidden');
+    
+    // Auto-close after a delay if not redirecting
+    if (!['binance', 'paypal'].includes(paymentMethod)) {
+        setTimeout(() => {
+            closeQuickProcessingModal();
+            setTimeout(() => location.reload(), 1000);
+        }, 5000);
+    }
+}
+
+function closeQuickProcessingModal() {
+    document.getElementById('payment-processing-modal').classList.add('hidden');
+    closeQuickAdd();
+}
+</script>
           
     </script>
     <script src="assets/js/app.js"></script>
